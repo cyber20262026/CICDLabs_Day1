@@ -1,0 +1,166 @@
+# Main Application Deployment Playbook
+- name: Deploy Flask Application
+  hosts: webservers
+  become: yes
+  become_user: root
+  gather_facts: yes
+
+  vars:
+    app_version: "1.0.0"
+    restart_services: true
+
+  vars_files:
+    - ../group_vars/webservers.yml
+
+  pre_tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+      run_once: true
+
+    - name: Create application directory
+      file:
+        path: "{{ app_directory }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+
+    - name: Create logs directory
+      file:
+        path: "{{ app_directory }}/logs"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+
+  tasks:
+    - name: Install required system packages
+      package:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+          - nginx
+          - supervisor
+          - curl
+        state: present
+      run_once: true
+
+    - name: Create application files directory
+      file:
+        path: "{{ app_directory }}/app"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+
+    - name: Create simple Flask application
+      copy:
+        content: |
+          from flask import Flask, jsonify
+          import os, datetime
+
+          app = Flask(__name__)
+
+          @app.route('/')
+          def home():
+              return f"""
+              <h1>Flask Demo Application</h1>
+              <p>Environment: {os.environ.get('ENVIRONMENT', 'dev')}</p>
+              <p>Host: {os.environ.get('HOSTNAME', 'unknown')}</p>
+              <p>Version: {os.environ.get('APP_VERSION', '1.0.0')}</p>
+              <p>Port: {os.environ.get('APP_PORT', '8080')}</p>
+              """
+
+          @app.route('/health')
+          def health():
+              return jsonify({
+                  "status": "healthy",
+                  "environment": os.environ.get("ENVIRONMENT", "dev"),
+                  "timestamp": datetime.datetime.now().isoformat(),
+                  "host": os.environ.get("HOSTNAME", "unknown")
+              })
+
+          @app.route('/version')
+          def version():
+              return jsonify({
+                  "app_version": os.environ.get("APP_VERSION", "1.0.0"),
+                  "environment": os.environ.get("ENVIRONMENT", "dev"),
+                  "port": os.environ.get("APP_PORT", "8080")
+              })
+
+          if __name__ == "__main__":
+              port = int(os.environ.get("APP_PORT", 8080))
+              app.run(host="0.0.0.0", port=port, debug=False)
+        dest: "{{ app_directory }}/app/app.py"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: '0755'
+
+    - name: Create requirements.txt
+      copy:
+        content: |
+          Flask==2.3.3
+          gunicorn==21.2.0
+        dest: "{{ app_directory }}/app/requirements.txt"
+
+    - name: Create Python virtual environment
+      command: python3 -m venv {{ app_directory }}/venv
+      args:
+        creates: "{{ app_directory }}/venv/bin/activate"
+
+    - name: Install Python dependencies into venv
+      pip:
+        requirements: "{{ app_directory }}/app/requirements.txt"
+        virtualenv: "{{ app_directory }}/venv"
+
+    - name: Generate application configuration
+      template:
+        src: templates/app.conf.j2
+        dest: "{{ app_directory }}/app.conf"
+
+    - name: Configure Supervisor for application
+      template:
+        src: templates/supervisor-app.conf.j2
+        dest: "/etc/supervisor/conf.d/{{ app_name }}.conf"
+
+  post_tasks:
+    - name: Ensure Supervisor is running
+      service:
+        name: supervisor
+        state: started
+        enabled: yes
+
+    - name: Reread Supervisor configs
+      command: supervisorctl reread
+
+    - name: Update Supervisor with new configs
+      command: supervisorctl update
+
+    - name: Start application
+      supervisorctl:
+        name: "{{ app_name }}"
+        state: started
+
+    - name: Wait for application to be ready
+      wait_for:
+        port: "{{ app_port }}"
+        host: "{{ ansible_host }}"
+        timeout: 30
+
+    - name: Test application health endpoint
+      uri:
+        url: "http://{{ ansible_host }}:{{ app_port }}/health"
+        method: GET
+        status_code: 200
+
+    - name: Display deployment summary
+      debug:
+        msg: |
+          Deployment completed successfully!
+          Application: {{ app_name }}
+          Version: {{ app_version }}
+          Environment: {{ app_environment }}
+          Host: {{ inventory_hostname }}
+          Port: {{ app_port }}
+          Health Check: http://{{ ansible_host }}:{{ app_port }}/health
+          Main Page: http://{{ ansible_host }}:{{ app_port }}/

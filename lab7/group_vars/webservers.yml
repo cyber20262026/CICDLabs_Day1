@@ -1,0 +1,21 @@
+# Variables specific to webserver group
+nginx_port: 80
+nginx_worker_processes: auto
+app_max_memory: 512M
+health_check_url: "/health"
+deployment_strategy: rolling
+max_failure_percentage: 20
+
+# Application configuration
+app_config:
+  debug: false
+  log_level: INFO
+  max_workers: 4
+  timeout: 30
+
+# Monitoring
+monitoring_enabled: true
+log_rotation_days: 30
+
+# Environment setting
+app_environment: development

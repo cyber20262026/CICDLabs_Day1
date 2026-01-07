@@ -1,0 +1,20 @@
+# Supervisor configuration for {{ app_name }}
+# Environment: {{ app_environment }}
+
+[program:{{ app_name }}]
+command={{ app_directory }}/venv/bin/python {{ app_directory }}/app/app.py
+directory={{ app_directory }}/app
+user={{ deploy_user }}
+autostart=true
+autorestart=true
+startretries=3
+redirect_stderr=true
+
+# Logs
+stdout_logfile={{ app_directory }}/logs/{{ app_name }}.out.log
+stderr_logfile={{ app_directory }}/logs/{{ app_name }}.err.log
+stdout_logfile_maxbytes=50MB
+stdout_logfile_backups=5
+
+# Environment variables
+environment=ENVIRONMENT="{{ app_environment }}",APP_VERSION="{{ app_version }}",APP_NAME="{{ app_name }}",APP_PORT="{{ app_port }}",HOSTNAME="{{ inventory_hostname }}",PYTHONPATH="{{ app_directory }}/app"

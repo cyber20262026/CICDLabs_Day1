@@ -1,0 +1,46 @@
+# Development Environment Inventory
+all:
+  children:
+    webservers:
+      hosts:
+        web1:
+          ansible_host: localhost
+          ansible_connection: local
+          ansible_user: codespace
+          server_role: primary
+          app_port: 8080
+          app_name: flask-demo-web1
+
+        web2:
+          ansible_host: localhost
+          ansible_connection: local
+          ansible_user: codespace
+          server_role: secondary
+          app_port: 8081
+          app_name: flask-demo-web2
+
+    databases:
+      hosts:
+        db1:
+          ansible_host: localhost
+          ansible_connection: local
+          ansible_user: codespace
+          db_port: 5432
+          db_name: app_database
+
+    loadbalancers:
+      hosts:
+        lb1:
+          ansible_host: localhost
+          ansible_connection: local
+          ansible_user: codespace
+          lb_algorithm: round_robin
+
+  vars:
+    environment: development
+    app_environment: development
+    deploy_user: codespace
+    app_directory: "/home/codespace/deployed-apps"
+    ansible_python_interpreter: /usr/bin/python3
+    app_version: "1.0.0"
+    restart_services: true
