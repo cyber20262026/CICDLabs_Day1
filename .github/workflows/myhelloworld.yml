@@ -1,0 +1,10 @@
+name: myhelloworld
+
+on:
+  workflow_dispatch:
+
+jobs:
+  say-name:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "my name is Ebone Williams"
